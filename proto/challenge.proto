@@ -1,0 +1,17 @@
+// compile with:
+// protoc --go_out=. --go_opt=paths=source_relative challenge.proto
+syntax="proto3";
+option go_package = "github.com/packetflinger/libquetoo/proto";
+package proto;
+
+// A challenge represents a clients intention to connect as a player. When
+// initiating a connection, a client will issue a "getchallege" message to the
+// server. The server will respond with one of these messages which includes
+// a challenge number, which is a sort of session id, and the protocol versionss
+// supported by the server.
+message Challenge {
+    // A session number included in the subsequent "connect" message
+    int32 number = 1;
+    // All the protocol version supported by the server
+    repeated int32 protocols = 2;
+}

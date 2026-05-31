@@ -1,0 +1,9 @@
+// compile with:
+// protoc --go_out=. --go_opt=paths=source_relative bsp.proto
+syntax="proto3";
+option go_package = "github.com/packetflinger/libq2/proto";
+package proto;
+
+message MapBrush {
+
+}
