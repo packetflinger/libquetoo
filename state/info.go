@@ -17,10 +17,10 @@ type ServerInfo struct {
 	}
 }
 
+// Request the current serverinfo from a Quetoo server. This will include all
+// CVARs marked as serverinfo and the ping/score for all connected players.
 func (s *Server) FetchInfo() (ServerInfo, error) {
-	p := message.ConnectionlessPacket{
-		Data: "status",
-	}
+	p := message.ConnectionlessPacket{Data: "status"}
 	out, err := p.Send(s.Address, s.Port)
 	if err != nil {
 		return ServerInfo{}, err
@@ -28,28 +28,38 @@ func (s *Server) FetchInfo() (ServerInfo, error) {
 	if len(out.Data) < 5 {
 		return ServerInfo{}, fmt.Errorf("invalid serverinfo response, is server running?")
 	}
-	lines := strings.Split(strings.Trim(string(out.Data[4:]), " \n\t"), "\n")
-	return parseServerinfo(lines)
+	info, err := ParseServerinfoResponse(out.Data)
+	if err != nil {
+		return ServerInfo{}, fmt.Errorf("%v", err)
+	}
+	return info, nil
+}
+
+// Create a ServerInfo struct from the data sent back from the server
+func ParseServerinfoResponse(b []byte) (ServerInfo, error) {
+	lines := strings.Split(strings.Trim(string(b[4:]), " \n\t"), "\n")
+	info, err := parseServerinfo(lines)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	return info, nil
 }
 
 func parseServerinfo(s []string) (ServerInfo, error) {
 	si := ServerInfo{}
 	info := map[string]string{}
 
-	if s[0] != "print" {
-		return ServerInfo{}, fmt.Errorf("invalid server info string")
+	if len(s) < 2 {
+		return ServerInfo{}, fmt.Errorf("invalid server info response")
 	}
 
-	serverinfo := ""
-	if len(s) > 1 {
-		if len(s[1]) > 0 {
-			serverinfo = s[1][1:]
-			vars := strings.Split(serverinfo, "\\")
+	if s[0] != "status" {
+		return ServerInfo{}, fmt.Errorf("response missing 'status' prefix")
+	}
 
-			for i := 0; i < len(vars); i += 2 {
-				info[strings.ToLower(vars[i])] = vars[i+1]
-			}
-		}
+	info = ParseInfoString(s[1])
+	if info == nil {
+		return ServerInfo{}, fmt.Errorf("nil info map")
 	}
 
 	if len(s) > 2 {
@@ -57,7 +67,6 @@ func parseServerinfo(s []string) (ServerInfo, error) {
 		info["player_count"] = fmt.Sprintf("%d", len(players))
 		if len(players) > 0 {
 			playernames := ""
-
 			for _, p := range players {
 				player := strings.SplitN(p, " ", 3)
 				playernames = fmt.Sprintf("%s,%s", playernames, player[2])
@@ -73,25 +82,26 @@ func parseServerinfo(s []string) (ServerInfo, error) {
 					Ping:  ping,
 				})
 			}
-
 			info["players"] = playernames[1:]
 		}
 	} else {
 		info["player_count"] = "0"
 	}
-
 	si.Server = info
 	return si, nil
 }
 
 // Parse and info string (in the format of:
-// "\key1\val1\key2\val2\key3\val3\" into a key/value map)
+// "key1\val1\key2\val2\key3\val3" into a key/value map)
 func ParseInfoString(info string) map[string]string {
-	infomap := map[string]string{}
+	if info == "" {
+		return nil
+	}
+	out := make(map[string]string)
 	vars := strings.Split(info, "\\")
 
 	for i := 0; i < len(vars); i += 2 {
-		infomap[strings.ToLower(vars[i])] = vars[i+1]
+		out[strings.ToLower(vars[i])] = vars[i+1]
 	}
-	return infomap
+	return out
 }
