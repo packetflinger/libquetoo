@@ -64,26 +64,29 @@ func parseServerinfo(s []string) (ServerInfo, error) {
 
 	if len(s) > 2 {
 		players := s[2:]
-		info["player_count"] = fmt.Sprintf("%d", len(players))
 		if len(players) > 0 {
 			playernames := ""
 			for _, p := range players {
-				player := strings.SplitN(p, " ", 3)
-				playernames = fmt.Sprintf("%s,%s", playernames, player[2])
-				score, _ := strconv.Atoi(player[0])
-				ping, _ := strconv.Atoi(player[1])
+				name, score, ping, ok := parsePlayer(p)
+				if !ok {
+					continue
+				}
+				playernames = fmt.Sprintf("%s,%s", playernames, name)
 				si.Players = append(si.Players, struct {
 					Name  string
 					Score int
 					Ping  int
 				}{
-					Name:  strings.Trim(player[2], "\""), // take quotes off
+					Name:  name,
 					Score: score,
 					Ping:  ping,
 				})
 			}
-			info["players"] = playernames[1:]
+			if playernames != "" {
+				info["players"] = playernames[1:]
+			}
 		}
+		info["player_count"] = fmt.Sprintf("%d", len(si.Players))
 	} else {
 		info["player_count"] = "0"
 	}
@@ -98,10 +101,30 @@ func ParseInfoString(info string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string)
-	vars := strings.Split(info, "\\")
+	vars := strings.Split(strings.TrimPrefix(info, "\\"), "\\")
 
-	for i := 0; i < len(vars); i += 2 {
+	for i := 0; i+1 < len(vars); i += 2 {
 		out[strings.ToLower(vars[i])] = vars[i+1]
 	}
 	return out
+}
+
+// Parse one player line from a status response. Newer servers send an info
+// string ("\score\9\ping\0\name\foo\ai\1"), older ones send
+// `score ping "name"`.
+func parsePlayer(line string) (name string, score, ping int, ok bool) {
+	if strings.HasPrefix(line, "\\") {
+		kv := ParseInfoString(line)
+		name, ok = kv["name"]
+		score, _ = strconv.Atoi(kv["score"])
+		ping, _ = strconv.Atoi(kv["ping"])
+		return name, score, ping, ok
+	}
+	fields := strings.SplitN(line, " ", 3)
+	if len(fields) < 3 {
+		return "", 0, 0, false
+	}
+	score, _ = strconv.Atoi(fields[0])
+	ping, _ = strconv.Atoi(fields[1])
+	return strings.Trim(fields[2], "\""), score, ping, true
 }

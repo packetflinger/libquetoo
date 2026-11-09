@@ -60,6 +60,25 @@ func TestServerinfoResponse(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "info string players",
+			data: "status\nvar1\\val1\n\\score\\9\\ping\\0\\name\\[BOT] Gladiator\\ai\\1\n\\score\\5\\ping\\40\\name\\joe\\ai\\0\nbroken",
+			want: ServerInfo{
+				Server: map[string]string{
+					"player_count": "2",
+					"players":      "[BOT] Gladiator,joe",
+					"var1":         "val1",
+				},
+				Players: []struct {
+					Name  string
+					Score int
+					Ping  int
+				}{
+					{Name: "[BOT] Gladiator", Score: 9, Ping: 0},
+					{Name: "joe", Score: 5, Ping: 40},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -76,6 +95,9 @@ func TestServerinfoResponse(t *testing.T) {
 			}
 			if !maps.Equal(tc.want.Server, si.Server) {
 				t.Errorf("info maps not equal:\ngot: %v\nwant: %v\n", si.Server, tc.want.Server)
+			}
+			if len(si.Players) != len(tc.want.Players) {
+				t.Fatalf("got %d players, want %d", len(si.Players), len(tc.want.Players))
 			}
 			if len(si.Players) > 0 {
 				for i := range si.Players {
